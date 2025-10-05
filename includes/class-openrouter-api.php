@@ -43,10 +43,10 @@ class OpenRouter_API {
         }
         
         // 构建prompt
-        $system_prompt = "你是一个专业的图片prompt生成专家。请根据给定的文章内容，生成一个适合作为文章封面图片的英文prompt。
+        $system_prompt = "你是一个专业的图片prompt生成专家。请根据给定的文章内容，生成一个适合作为文章封面图片的中文prompt。
 
 要求：
-1. prompt必须是英文
+1. prompt必须是中文
 2. 适合作为文章封面图片
 3. 风格要现代、专业、吸引人
 4. 长度控制在100-200个单词
