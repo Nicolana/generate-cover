@@ -86,6 +86,8 @@ class Jimeng_AI {
             'max_ratio' => $options['max_ratio']
         ];
         
+        error_log('Jimeng AI: Task body = ' . print_r($body, true));
+        
         $json_body = json_encode($body, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
         if ($json_body === false) {
             error_log('Jimeng AI: JSON encode failed - ' . json_last_error_msg());
@@ -97,13 +99,18 @@ class Jimeng_AI {
         
         $headers = $this->get_auth_headers('CVSync2AsyncSubmitTask', $body);
         
+        error_log('Jimeng AI: Submitting task to ' . $url);
+        error_log('Jimeng AI: Request body = ' . $json_body);
+        error_log('Jimeng AI: Request headers = ' . print_r($headers, true));
+        
         $response = wp_remote_post($url, [
             'headers' => $headers,
             'body' => $json_body,
-            'timeout' => 30
+            'timeout' => 60
         ]);
         
         if (is_wp_error($response)) {
+            error_log('Jimeng AI: Submit request error - ' . $response->get_error_message());
             return [
                 'success' => false,
                 'message' => '请求失败：' . $response->get_error_message()
@@ -111,7 +118,13 @@ class Jimeng_AI {
         }
         
         $status_code = wp_remote_retrieve_response_code($response);
+        $response_headers = wp_remote_retrieve_headers($response);
         $body = wp_remote_retrieve_body($response);
+        
+        error_log('Jimeng AI: Submit response status = ' . $status_code);
+        error_log('Jimeng AI: Response headers = ' . print_r($response_headers, true));
+        error_log('Jimeng AI: Response body = ' . $body);
+        
         $data = json_decode($body, true);
         
         if ($status_code !== 200) {
@@ -214,13 +227,18 @@ class Jimeng_AI {
         
         $headers = $this->get_auth_headers('CVSync2AsyncGetResult', $body);
         
+        error_log('Jimeng AI: Getting result from ' . $url);
+        error_log('Jimeng AI: Request body = ' . $json_body);
+        error_log('Jimeng AI: Request headers = ' . print_r($headers, true));
+        
         $response = wp_remote_post($url, [
             'headers' => $headers,
             'body' => $json_body,
-            'timeout' => 30
+            'timeout' => 60
         ]);
         
         if (is_wp_error($response)) {
+            error_log('Jimeng AI: Get result request error - ' . $response->get_error_message());
             return [
                 'success' => false,
                 'message' => '请求失败：' . $response->get_error_message()
@@ -228,7 +246,13 @@ class Jimeng_AI {
         }
         
         $status_code = wp_remote_retrieve_response_code($response);
+        $response_headers = wp_remote_retrieve_headers($response);
         $body = wp_remote_retrieve_body($response);
+        
+        error_log('Jimeng AI: Get result response status = ' . $status_code);
+        error_log('Jimeng AI: Response headers = ' . print_r($response_headers, true));
+        error_log('Jimeng AI: Response body = ' . $body);
+        
         $data = json_decode($body, true);
         
         if ($status_code !== 200) {
@@ -267,36 +291,63 @@ class Jimeng_AI {
         $timestamp = gmdate('Ymd\THis\Z');
         $date = gmdate('Ymd');
         
+        // 计算body的SHA256哈希
+        $body_json = json_encode($body, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        $content_sha256 = hash('sha256', $body_json);
+        
+        error_log('Jimeng AI: Body JSON = ' . $body_json);
+        error_log('Jimeng AI: Content SHA256 = ' . $content_sha256);
+        
         // 构建请求参数
         $query_params = [
             'Action' => $action,
             'Version' => '2022-08-31'
         ];
         
+        // 按照官方示例的格式构建签名
         $canonical_query = http_build_query($query_params);
-        $canonical_headers = "content-type:application/json\nhost:visual.volcengineapi.com\nx-date:{$timestamp}\n";
-        $signed_headers = "content-type;host;x-date";
-        $payload_hash = hash('sha256', json_encode($body));
         
-        $canonical_request = "POST\n/\n{$canonical_query}\n{$canonical_headers}\n{$signed_headers}\n{$payload_hash}";
+        // 按照官方示例的精确格式
+        $canonical_headers = "content-type:application/json\nhost:visual.volcengineapi.com\nx-content-sha256:{$content_sha256}\nx-date:{$timestamp}";
+        $signed_headers = "content-type;host;x-content-sha256;x-date";
         
-        // 计算签名
+        // 构建 Canonical Request - 完全按照官方示例
+        $canonical_request = implode("\n", [
+            'POST',
+            '/',
+            $canonical_query,
+            $canonical_headers,
+            '',  // 空行
+            $signed_headers,
+            $content_sha256
+        ]);
+        
+        error_log('Jimeng AI: Canonical Request = ' . $canonical_request);
+        
+        // 计算签名 - 按照官方示例
+        $hashed_canonical_request = hash('sha256', $canonical_request);
         $credential_scope = "{$date}/{$this->region}/{$this->service}/request";
-        $string_to_sign = "HMAC-SHA256\n{$timestamp}\n{$credential_scope}\n" . hash('sha256', $canonical_request);
+        $string_to_sign = "HMAC-SHA256\n{$timestamp}\n{$credential_scope}\n{$hashed_canonical_request}";
         
-        $signing_key = hash_hmac('sha256', $date, $this->secret_key, true);
-        $signing_key = hash_hmac('sha256', $this->region, $signing_key, true);
-        $signing_key = hash_hmac('sha256', $this->service, $signing_key, true);
-        $signing_key = hash_hmac('sha256', 'request', $signing_key, true);
+        error_log('Jimeng AI: String to Sign = ' . $string_to_sign);
         
-        $signature = hash_hmac('sha256', $string_to_sign, $signing_key);
+        // 计算签名密钥 - 按照官方示例
+        $k_date = hash_hmac('sha256', $date, $this->secret_key, true);
+        $k_region = hash_hmac('sha256', $this->region, $k_date, true);
+        $k_service = hash_hmac('sha256', $this->service, $k_region, true);
+        $k_signing = hash_hmac('sha256', 'request', $k_service, true);
+        
+        $signature = hash_hmac('sha256', $string_to_sign, $k_signing);
         
         $authorization = "HMAC-SHA256 Credential={$this->access_key}/{$credential_scope}, SignedHeaders={$signed_headers}, Signature={$signature}";
+        
+        error_log('Jimeng AI: Authorization = ' . $authorization);
         
         return [
             'Authorization' => $authorization,
             'Content-Type' => 'application/json',
             'Host' => 'visual.volcengineapi.com',
+            'X-Content-Sha256' => $content_sha256,
             'X-Date' => $timestamp
         ];
     }

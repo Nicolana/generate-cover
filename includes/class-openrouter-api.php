@@ -43,10 +43,10 @@ class OpenRouter_API {
         }
         
         // 构建prompt
-        $system_prompt = "你是一个专业的图片prompt生成专家。请根据给定的文章内容，生成一个适合作为文章封面图片的中文prompt。
+        $system_prompt = "你是一个专业的图片prompt生成专家。请根据给定的文章内容，生成一个适合作为文章封面图片的英文prompt。
 
 要求：
-1. prompt必须是中文
+1. prompt描述必须是英文，但是文章标题需要保持和原文一致
 2. 适合作为文章封面图片
 3. 风格要现代、专业、吸引人
 4. 长度控制在100-200个单词
@@ -157,10 +157,19 @@ class OpenRouter_API {
         
         error_log('OpenRouter API: Sending POST request to ' . $url);
         
+        // 测试DNS解析
+        $host = 'openrouter.ai';
+        $ip = gethostbyname($host);
+        error_log('OpenRouter API: DNS resolution - ' . $host . ' => ' . $ip);
+        
+        if ($ip === $host) {
+            error_log('OpenRouter API: DNS resolution FAILED!');
+        }
+        
         $response = wp_remote_post($url, [
             'headers' => $headers,
             'body' => $body,
-            'timeout' => 30
+            'timeout' => 60
         ]);
         
         if (is_wp_error($response)) {
