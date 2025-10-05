@@ -26,7 +26,7 @@ class Cover_Generator {
         try {
             // 1. 获取文章内容
             $content = $this->get_post_content($post);
-            $title = $post->post_title;
+            $title = $this->sanitize_utf8($post->post_title);
             
             if (empty($content)) {
                 return [
@@ -119,12 +119,45 @@ class Cover_Generator {
         // 获取文章内容，去除HTML标签
         $content = strip_tags($post->post_content);
         
+        // 清理UTF-8编码问题
+        $content = $this->sanitize_utf8($content);
+        
         // 限制内容长度，避免prompt过长
-        if (strlen($content) > 2000) {
-            $content = substr($content, 0, 2000) . '...';
+        if (mb_strlen($content, 'UTF-8') > 2000) {
+            $content = mb_substr($content, 0, 2000, 'UTF-8') . '...';
         }
         
         return $content;
+    }
+    
+    /**
+     * 清理文本中的无效UTF-8字符
+     * 
+     * @param string $text
+     * @return string
+     */
+    private function sanitize_utf8($text) {
+        // 方法1: 使用mb_convert_encoding修复编码
+        if (function_exists('mb_convert_encoding')) {
+            $text = mb_convert_encoding($text, 'UTF-8', 'UTF-8');
+        }
+        
+        // 方法2: 移除无效的UTF-8字符
+        $text = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', $text);
+        
+        // 方法3: 确保是有效的UTF-8
+        if (!mb_check_encoding($text, 'UTF-8')) {
+            // 如果仍然不是有效的UTF-8，使用iconv转换
+            if (function_exists('iconv')) {
+                $text = iconv('UTF-8', 'UTF-8//IGNORE', $text);
+            }
+        }
+        
+        // 移除多余的空白字符
+        $text = preg_replace('/\s+/', ' ', $text);
+        $text = trim($text);
+        
+        return $text;
     }
     
     /**

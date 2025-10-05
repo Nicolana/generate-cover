@@ -86,11 +86,20 @@ class Jimeng_AI {
             'max_ratio' => $options['max_ratio']
         ];
         
+        $json_body = json_encode($body, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        if ($json_body === false) {
+            error_log('Jimeng AI: JSON encode failed - ' . json_last_error_msg());
+            return [
+                'success' => false,
+                'message' => 'JSON编码失败: ' . json_last_error_msg()
+            ];
+        }
+        
         $headers = $this->get_auth_headers('CVSync2AsyncSubmitTask', $body);
         
         $response = wp_remote_post($url, [
             'headers' => $headers,
-            'body' => json_encode($body),
+            'body' => $json_body,
             'timeout' => 30
         ]);
         
@@ -194,11 +203,20 @@ class Jimeng_AI {
             ])
         ];
         
+        $json_body = json_encode($body, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        if ($json_body === false) {
+            error_log('Jimeng AI: JSON encode failed - ' . json_last_error_msg());
+            return [
+                'success' => false,
+                'message' => 'JSON编码失败: ' . json_last_error_msg()
+            ];
+        }
+        
         $headers = $this->get_auth_headers('CVSync2AsyncGetResult', $body);
         
         $response = wp_remote_post($url, [
             'headers' => $headers,
-            'body' => json_encode($body),
+            'body' => $json_body,
             'timeout' => 30
         ]);
         

@@ -131,6 +131,23 @@ class OpenRouter_API {
             'top_p' => 0.9
         ];
         
+        error_log('OpenRouter API: Preparing request');
+        error_log('OpenRouter API: Model = ' . $this->model);
+        error_log('OpenRouter API: Messages count = ' . count($messages));
+        
+        // 使用 JSON_UNESCAPED_UNICODE 和 JSON_INVALID_UTF8_SUBSTITUTE 选项
+        $body = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        if ($body === false) {
+            error_log('OpenRouter API: JSON encode failed - ' . json_last_error_msg());
+            error_log('OpenRouter API: Data dump - ' . print_r($data, true));
+            return [
+                'success' => false,
+                'message' => 'JSON编码失败: ' . json_last_error_msg()
+            ];
+        }
+        
+        error_log('OpenRouter API: JSON body length = ' . strlen($body));
+        
         $headers = [
             'Authorization' => 'Bearer ' . $this->api_key,
             'Content-Type' => 'application/json',
@@ -138,13 +155,16 @@ class OpenRouter_API {
             'X-Title' => 'Generate Cover WordPress Plugin'
         ];
         
+        error_log('OpenRouter API: Sending POST request to ' . $url);
+        
         $response = wp_remote_post($url, [
             'headers' => $headers,
-            'body' => json_encode($data),
+            'body' => $body,
             'timeout' => 30
         ]);
         
         if (is_wp_error($response)) {
+            error_log('OpenRouter API: Request error - ' . $response->get_error_message());
             return [
                 'success' => false,
                 'message' => '请求失败：' . $response->get_error_message()
@@ -152,11 +172,17 @@ class OpenRouter_API {
         }
         
         $status_code = wp_remote_retrieve_response_code($response);
-        $body = wp_remote_retrieve_body($response);
-        $data = json_decode($body, true);
+        $response_body = wp_remote_retrieve_body($response);
+        
+        error_log('OpenRouter API: Response status = ' . $status_code);
+        error_log('OpenRouter API: Response body length = ' . strlen($response_body));
+        
+        $data = json_decode($response_body, true);
         
         if ($status_code !== 200) {
             $error_message = isset($data['error']['message']) ? $data['error']['message'] : '未知错误';
+            error_log('OpenRouter API: API error - ' . $error_message);
+            error_log('OpenRouter API: Full response - ' . $response_body);
             return [
                 'success' => false,
                 'message' => 'API错误：' . $error_message
@@ -164,11 +190,15 @@ class OpenRouter_API {
         }
         
         if (!isset($data['choices'][0]['message']['content'])) {
+            error_log('OpenRouter API: Invalid response format');
+            error_log('OpenRouter API: Response data - ' . print_r($data, true));
             return [
                 'success' => false,
                 'message' => '响应格式错误'
             ];
         }
+        
+        error_log('OpenRouter API: Request successful');
         
         return [
             'success' => true,
