@@ -337,10 +337,14 @@ class Admin_Settings {
     }
     
     public function test_openrouter_api() {
-        check_ajax_referer('test_openrouter_api', 'nonce');
-        
+        // 检查用户权限
         if (!current_user_can('manage_options')) {
-            wp_die('权限不足');
+            wp_send_json_error('权限不足');
+        }
+        
+        // 检查nonce
+        if (!wp_verify_nonce($_POST['nonce'], 'test_openrouter_api')) {
+            wp_send_json_error('安全验证失败');
         }
         
         try {
@@ -358,10 +362,14 @@ class Admin_Settings {
     }
     
     public function test_jimeng_api() {
-        check_ajax_referer('test_jimeng_api', 'nonce');
-        
+        // 检查用户权限
         if (!current_user_can('manage_options')) {
-            wp_die('权限不足');
+            wp_send_json_error('权限不足');
+        }
+        
+        // 检查nonce
+        if (!wp_verify_nonce($_POST['nonce'], 'test_jimeng_api')) {
+            wp_send_json_error('安全验证失败');
         }
         
         try {
@@ -379,13 +387,20 @@ class Admin_Settings {
     }
     
     public function ajax_regenerate_cover() {
-        check_ajax_referer('generate_cover_nonce', 'nonce');
-        
+        // 检查用户权限
         if (!current_user_can('edit_posts')) {
-            wp_die('权限不足');
+            wp_send_json_error('权限不足');
+        }
+        
+        // 检查nonce
+        if (!wp_verify_nonce($_POST['nonce'], 'generate_cover_nonce')) {
+            wp_send_json_error('安全验证失败');
         }
         
         $post_id = intval($_POST['post_id']);
+        if (!$post_id) {
+            wp_send_json_error('无效的文章ID');
+        }
         
         try {
             $generator = new Cover_Generator();
@@ -402,13 +417,20 @@ class Admin_Settings {
     }
     
     public function ajax_get_generation_history() {
-        check_ajax_referer('generate_cover_nonce', 'nonce');
-        
+        // 检查用户权限
         if (!current_user_can('edit_posts')) {
-            wp_die('权限不足');
+            wp_send_json_error('权限不足');
+        }
+        
+        // 检查nonce
+        if (!wp_verify_nonce($_POST['nonce'], 'generate_cover_nonce')) {
+            wp_send_json_error('安全验证失败');
         }
         
         $post_id = intval($_POST['post_id']);
+        if (!$post_id) {
+            wp_send_json_error('无效的文章ID');
+        }
         
         try {
             $generator = new Cover_Generator();

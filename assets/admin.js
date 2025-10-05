@@ -6,6 +6,31 @@
     'use strict';
     
     $(document).ready(function() {
+        // 检查必要的变量是否存在
+        if (typeof generateCoverData === 'undefined') {
+            console.error('Generate Cover: JavaScript variables not loaded');
+            return;
+        }
+        
+        // 调试信息
+        console.log('Generate Cover: Variables loaded:', generateCoverData);
+        
+        // 检查用户登录状态
+        if (!generateCoverData.isLoggedIn) {
+            console.error('Generate Cover: User not logged in');
+            console.log('Generate Cover: User ID:', generateCoverData.userId);
+            console.log('Generate Cover: Can edit posts:', generateCoverData.canEditPosts);
+            return;
+        }
+        
+        // 检查用户权限
+        if (!generateCoverData.canEditPosts) {
+            console.error('Generate Cover: User cannot edit posts');
+            return;
+        }
+        
+        console.log('Generate Cover: All checks passed, binding events');
+        
         // 绑定生成封面按钮事件
         $('#generate-cover-btn').on('click', function() {
             generateCover();
@@ -42,18 +67,25 @@
         
         // 发送AJAX请求
         $.ajax({
-            url: generateCover.ajaxUrl,
+            url: generateCoverData.ajaxUrl,
             type: 'POST',
             data: {
                 action: 'generate_cover',
-                post_id: generateCover.postId,
-                nonce: generateCover.nonce
+                post_id: generateCoverData.postId,
+                nonce: generateCoverData.nonce
+            },
+            dataType: 'json',
+            beforeSend: function(xhr) {
+                xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+                xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
             },
             success: function(response) {
                 $status.hide();
                 $btn.prop('disabled', false);
                 
-                if (response.success) {
+                console.log('AJAX Success Response:', response);
+                
+                if (response && response.success) {
                     showSuccessResult(response.data);
                 } else {
                     showError(response.data || '生成失败');
@@ -62,7 +94,25 @@
             error: function(xhr, status, error) {
                 $status.hide();
                 $btn.prop('disabled', false);
-                showError('网络错误：' + error);
+                
+                console.error('AJAX Error Details:');
+                console.error('Status:', xhr.status);
+                console.error('Status Text:', xhr.statusText);
+                console.error('Response Text:', xhr.responseText);
+                console.error('Response Headers:', xhr.getAllResponseHeaders());
+                
+                // 检查响应是否是HTML而不是JSON
+                if (xhr.responseText && xhr.responseText.trim().startsWith('<!DOCTYPE')) {
+                    showError('服务器返回了HTML页面而不是JSON数据。这通常表示：1) 用户未登录 2) 会话已过期 3) 权限不足。请刷新页面重新登录。');
+                } else if (xhr.status === 302) {
+                    showError('会话已过期，请刷新页面后重试');
+                } else if (xhr.status === 401) {
+                    showError('用户未登录，请先登录WordPress管理后台');
+                } else if (xhr.status === 403) {
+                    showError('权限不足，请确保有编辑文章的权限');
+                } else {
+                    showError('网络错误：' + error + ' (状态码: ' + xhr.status + ')');
+                }
             }
         });
     }
@@ -91,18 +141,19 @@
         
         // 发送AJAX请求
         $.ajax({
-            url: generateCover.ajaxUrl,
+            url: generateCoverData.ajaxUrl,
             type: 'POST',
             data: {
                 action: 'regenerate_cover',
-                post_id: generateCover.postId,
-                nonce: generateCover.nonce
+                post_id: generateCoverData.postId,
+                nonce: generateCoverData.nonce
             },
+            dataType: 'json',
             success: function(response) {
                 $status.hide();
                 $btn.prop('disabled', false);
                 
-                if (response.success) {
+                if (response && response.success) {
                     showSuccessResult(response.data);
                 } else {
                     showError(response.data || '重新生成失败');
@@ -111,7 +162,14 @@
             error: function(xhr, status, error) {
                 $status.hide();
                 $btn.prop('disabled', false);
-                showError('网络错误：' + error);
+                
+                console.error('AJAX Error:', xhr.responseText);
+                
+                if (xhr.status === 302) {
+                    showError('会话已过期，请刷新页面后重试');
+                } else {
+                    showError('网络错误：' + error + ' (状态码: ' + xhr.status + ')');
+                }
             }
         });
     }
@@ -183,22 +241,29 @@
     function viewGenerationHistory() {
         // 发送AJAX请求获取历史记录
         $.ajax({
-            url: generateCover.ajaxUrl,
+            url: generateCoverData.ajaxUrl,
             type: 'POST',
             data: {
                 action: 'get_generation_history',
-                post_id: generateCover.postId,
-                nonce: generateCover.nonce
+                post_id: generateCoverData.postId,
+                nonce: generateCoverData.nonce
             },
+            dataType: 'json',
             success: function(response) {
-                if (response.success) {
+                if (response && response.success) {
                     showHistoryModal(response.data);
                 } else {
                     showError('获取历史记录失败');
                 }
             },
             error: function(xhr, status, error) {
-                showError('网络错误：' + error);
+                console.error('AJAX Error:', xhr.responseText);
+                
+                if (xhr.status === 302) {
+                    showError('会话已过期，请刷新页面后重试');
+                } else {
+                    showError('网络错误：' + error + ' (状态码: ' + xhr.status + ')');
+                }
             }
         });
     }

@@ -69,10 +69,11 @@ class Plugin {
         add_action('admin_init', [$this, 'register_settings']);
         add_action('add_meta_boxes', [$this, 'add_meta_boxes']);
         add_action('wp_ajax_generate_cover', [$this, 'ajax_generate_cover']);
-        add_action('wp_ajax_nopriv_generate_cover', [$this, 'ajax_generate_cover']);
         add_action('wp_ajax_regenerate_cover', [$this, 'ajax_regenerate_cover']);
         add_action('wp_ajax_get_generation_history', [$this, 'ajax_get_generation_history']);
         add_action('wp_ajax_batch_generate_covers', [$this, 'ajax_batch_generate_covers']);
+        add_action('wp_ajax_test_ajax_connection', [$this, 'ajax_test_connection']);
+        add_action('wp_ajax_simple_test', [$this, 'ajax_simple_test']);
         add_action('admin_enqueue_scripts', [$this, 'enqueue_admin_scripts']);
         add_action('publish_post', [$this, 'auto_generate_cover']);
         add_action('generate_cover_async', [$this, 'handle_async_generation']);
@@ -245,29 +246,61 @@ class Plugin {
             GENERATE_COVER_VERSION
         );
         
-        wp_localize_script('generate-cover-admin', 'generateCover', [
+        wp_localize_script('generate-cover-admin', 'generateCoverData', [
             'ajaxUrl' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('generate_cover_nonce'),
-            'postId' => get_the_ID()
+            'postId' => get_the_ID(),
+            'userId' => get_current_user_id(),
+            'isLoggedIn' => is_user_logged_in(),
+            'canEditPosts' => current_user_can('edit_posts')
         ]);
     }
     
     public function ajax_generate_cover() {
-        check_ajax_referer('generate_cover_nonce', 'nonce');
+        // 确保这是AJAX请求
+        if (!wp_doing_ajax()) {
+            wp_die('Invalid request');
+        }
         
+        // 确保输出是JSON格式
+        header('Content-Type: application/json; charset=utf-8');
+        
+        // 调试日志
+        error_log('Generate Cover: AJAX request received');
+        error_log('Generate Cover: POST data: ' . print_r($_POST, true));
+        error_log('Generate Cover: User logged in: ' . (is_user_logged_in() ? 'yes' : 'no'));
+        error_log('Generate Cover: User ID: ' . get_current_user_id());
+        
+        // 检查用户是否已登录
+        if (!is_user_logged_in()) {
+            error_log('Generate Cover: User not logged in');
+            wp_send_json_error('用户未登录，请先登录');
+        }
+        
+        // 检查用户权限
         if (!current_user_can('edit_posts')) {
-            wp_die('权限不足');
+            error_log('Generate Cover: User permission denied');
+            wp_send_json_error('权限不足');
+        }
+        
+        // 检查nonce
+        if (!wp_verify_nonce($_POST['nonce'], 'generate_cover_nonce')) {
+            error_log('Generate Cover: Nonce verification failed');
+            wp_send_json_error('安全验证失败');
         }
         
         $post_id = intval($_POST['post_id']);
-        $post = get_post($post_id);
+        if (!$post_id) {
+            wp_send_json_error('无效的文章ID');
+        }
         
+        $post = get_post($post_id);
         if (!$post) {
             wp_send_json_error('文章不存在');
         }
         
         try {
-            $generator = new \GenerateCover\CoverGenerator();
+            $generator = new \GenerateCover\Cover_Generator();
             $result = $generator->generate_cover($post);
             
             if ($result['success']) {
@@ -290,16 +323,31 @@ class Plugin {
     }
     
     public function ajax_regenerate_cover() {
-        check_ajax_referer('generate_cover_nonce', 'nonce');
+        // 确保这是AJAX请求
+        if (!wp_doing_ajax()) {
+            wp_die('Invalid request');
+        }
         
+        // 确保输出是JSON格式
+        header('Content-Type: application/json; charset=utf-8');
+        
+        // 检查用户权限
         if (!current_user_can('edit_posts')) {
-            wp_die('权限不足');
+            wp_send_json_error('权限不足');
+        }
+        
+        // 检查nonce
+        if (!wp_verify_nonce($_POST['nonce'], 'generate_cover_nonce')) {
+            wp_send_json_error('安全验证失败');
         }
         
         $post_id = intval($_POST['post_id']);
+        if (!$post_id) {
+            wp_send_json_error('无效的文章ID');
+        }
         
         try {
-            $generator = new \GenerateCover\CoverGenerator();
+            $generator = new \GenerateCover\Cover_Generator();
             $result = $generator->regenerate_cover($post_id);
             
             if ($result['success']) {
@@ -313,16 +361,31 @@ class Plugin {
     }
     
     public function ajax_get_generation_history() {
-        check_ajax_referer('generate_cover_nonce', 'nonce');
+        // 确保这是AJAX请求
+        if (!wp_doing_ajax()) {
+            wp_die('Invalid request');
+        }
         
+        // 确保输出是JSON格式
+        header('Content-Type: application/json; charset=utf-8');
+        
+        // 检查用户权限
         if (!current_user_can('edit_posts')) {
-            wp_die('权限不足');
+            wp_send_json_error('权限不足');
+        }
+        
+        // 检查nonce
+        if (!wp_verify_nonce($_POST['nonce'], 'generate_cover_nonce')) {
+            wp_send_json_error('安全验证失败');
         }
         
         $post_id = intval($_POST['post_id']);
+        if (!$post_id) {
+            wp_send_json_error('无效的文章ID');
+        }
         
         try {
-            $generator = new \GenerateCover\CoverGenerator();
+            $generator = new \GenerateCover\Cover_Generator();
             $history = $generator->get_generation_history($post_id);
             
             wp_send_json_success($history);
@@ -332,10 +395,22 @@ class Plugin {
     }
     
     public function ajax_batch_generate_covers() {
-        check_ajax_referer('batch_generate_covers', 'nonce');
+        // 确保这是AJAX请求
+        if (!wp_doing_ajax()) {
+            wp_die('Invalid request');
+        }
         
+        // 确保输出是JSON格式
+        header('Content-Type: application/json; charset=utf-8');
+        
+        // 检查用户权限
         if (!current_user_can('manage_options')) {
-            wp_die('权限不足');
+            wp_send_json_error('权限不足');
+        }
+        
+        // 检查nonce
+        if (!wp_verify_nonce($_POST['nonce'], 'batch_generate_covers')) {
+            wp_send_json_error('安全验证失败');
         }
         
         try {
@@ -359,7 +434,7 @@ class Plugin {
                 ]);
             }
             
-            $generator = new \GenerateCover\CoverGenerator();
+            $generator = new \GenerateCover\Cover_Generator();
             $results = $generator->batch_generate_covers(wp_list_pluck($posts, 'ID'));
             
             $success_count = 0;
@@ -414,7 +489,7 @@ class Plugin {
                 return;
             }
             
-            $generator = new \GenerateCover\CoverGenerator();
+            $generator = new \GenerateCover\Cover_Generator();
             $result = $generator->generate_cover($post);
             
             if ($result['success']) {
@@ -444,6 +519,50 @@ class Plugin {
         }
         
         update_option('generate_cover_logs', $logs);
+    }
+    
+    public function ajax_test_connection() {
+        // 确保这是AJAX请求
+        if (!wp_doing_ajax()) {
+            wp_die('Invalid request');
+        }
+        
+        // 确保输出是JSON格式
+        header('Content-Type: application/json; charset=utf-8');
+        
+        // 检查用户权限
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('权限不足');
+        }
+        
+        // 检查nonce
+        if (!wp_verify_nonce($_POST['nonce'], 'test_ajax_connection')) {
+            wp_send_json_error('安全验证失败');
+        }
+        
+        wp_send_json_success([
+            'message' => 'AJAX连接正常',
+            'timestamp' => current_time('mysql'),
+            'user_id' => get_current_user_id(),
+            'post_data' => $_POST
+        ]);
+    }
+    
+    public function ajax_simple_test() {
+        // 确保这是AJAX请求
+        if (!wp_doing_ajax()) {
+            wp_die('Invalid request');
+        }
+        
+        // 确保输出是JSON格式
+        header('Content-Type: application/json; charset=utf-8');
+        
+        // 简单的测试，不需要权限检查
+        wp_send_json_success([
+            'message' => '简单测试成功',
+            'timestamp' => current_time('mysql'),
+            'is_ajax' => wp_doing_ajax()
+        ]);
     }
     
     public static function deactivate() {

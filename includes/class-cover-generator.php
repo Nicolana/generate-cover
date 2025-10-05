@@ -83,7 +83,7 @@ class Cover_Generator {
                 update_post_meta($post->ID, '_ai_summary', $summary_result['content']);
             }
             
-            return [
+            $result = [
                 'success' => true,
                 'attachment_id' => $attachment_id,
                 'image_url' => wp_get_attachment_url($attachment_id),
@@ -91,11 +91,21 @@ class Cover_Generator {
                 'summary' => $summary_result['success'] ? $summary_result['content'] : null
             ];
             
+            // 记录生成历史
+            $this->record_generation_history($post->ID, $result);
+            
+            return $result;
+            
         } catch (Exception $e) {
-            return [
+            $error_result = [
                 'success' => false,
                 'message' => '生成过程中发生错误：' . $e->getMessage()
             ];
+            
+            // 记录失败历史
+            $this->record_generation_history($post->ID, $error_result);
+            
+            return $error_result;
         }
     }
     
