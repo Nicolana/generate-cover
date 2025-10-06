@@ -56,8 +56,8 @@ foreach ($files_to_copy as $file) {
     }
 }
 
-// 创建ZIP包（包含版本号）
-$zip_file = $build_dir . '/' . $plugin_name . '-v' . $version . '.zip';
+// 创建ZIP包（不包含版本号，符合WordPress标准）
+$zip_file = $build_dir . '/' . $plugin_name . '.zip';
 if (file_exists($zip_file)) {
     unlink($zip_file);
 }

@@ -37,7 +37,7 @@ class Plugin_Updater {
         // 获取远程版本信息
         $remote_version = $this->get_remote_version();
         
-        if ($remote_version && version_compare($this->version, $remote_version, '<')) {
+        if ($remote_version && version_compare($this->version, $remote_version, '<') && $this->is_valid_version($remote_version)) {
             $res = new \stdClass();
             $res->slug = $this->plugin_slug;
             $res->plugin = $this->plugin_slug;
@@ -157,38 +157,69 @@ class Plugin_Updater {
             $response = wp_remote_get(
                 'https://api.github.com/repos/Nicolana/generate-cover/releases/latest',
                 [
-                    'timeout' => 10,
+                    'timeout' => 15,
                     'headers' => [
                         'Accept' => 'application/vnd.github.v3+json',
+                        'User-Agent' => 'WordPress/' . get_bloginfo('version') . '; ' . home_url()
                     ]
                 ]
             );
             
-            if (!is_wp_error($response) && isset($response['response']['code']) && $response['response']['code'] == 200 && !empty($response['body'])) {
-                $release_data = json_decode($response['body'], true);
-                
-                // 构建WordPress插件更新格式
-                $remote = (object) [
-                    'name' => 'Generate Cover',
-                    'slug' => $this->plugin_slug,
-                    'version' => ltrim($release_data['tag_name'], 'v'),
-                    'tested' => '6.4',
-                    'requires' => '5.0',
-                    'requires_php' => '7.4',
-                    'author' => 'Nicolana',
-                    'author_profile' => 'https://github.com/Nicolana',
-                    'download_link' => $this->get_download_url($release_data),
-                    'url' => 'https://github.com/Nicolana/generate-cover',
-                    'last_updated' => $release_data['published_at'],
-                    'sections' => (object) [
-                        'description' => $this->get_release_description($release_data),
-                        'installation' => '1. 下载最新版本的插件包\n2. 解压到 /wp-content/plugins/ 目录\n3. 在WordPress后台激活插件',
-                        'changelog' => $this->get_release_changelog($release_data)
-                    ]
-                ];
-                
-                set_transient($this->cache_key, $remote, 7200);
+            if (is_wp_error($response)) {
+                error_log('Generate Cover Updater: ' . $response->get_error_message());
+                return false;
             }
+            
+            $response_code = wp_remote_retrieve_response_code($response);
+            if ($response_code !== 200) {
+                error_log("Generate Cover Updater: HTTP {$response_code} error");
+                return false;
+            }
+            
+            $body = wp_remote_retrieve_body($response);
+            if (empty($body)) {
+                error_log('Generate Cover Updater: Empty response body');
+                return false;
+            }
+            
+            $release_data = json_decode($body, true);
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                error_log('Generate Cover Updater: JSON decode error - ' . json_last_error_msg());
+                return false;
+            }
+            
+            if (!isset($release_data['tag_name']) || !isset($release_data['assets'])) {
+                error_log('Generate Cover Updater: Invalid release data structure');
+                return false;
+            }
+            
+            // 构建WordPress插件更新格式
+            $remote = (object) [
+                'name' => 'Generate Cover',
+                'slug' => $this->plugin_slug,
+                'version' => ltrim($release_data['tag_name'], 'v'),
+                'tested' => '6.4',
+                'requires' => '5.0',
+                'requires_php' => '7.4',
+                'author' => 'Nicolana',
+                'author_profile' => 'https://github.com/Nicolana',
+                'download_link' => $this->get_download_url($release_data),
+                'url' => 'https://github.com/Nicolana/generate-cover',
+                'last_updated' => $release_data['published_at'],
+                'sections' => (object) [
+                    'description' => $this->get_release_description($release_data),
+                    'installation' => '1. 下载最新版本的插件包\n2. 解压到 /wp-content/plugins/ 目录\n3. 在WordPress后台激活插件',
+                    'changelog' => $this->get_release_changelog($release_data)
+                ]
+            ];
+            
+            // 验证下载链接是否存在
+            if (empty($remote->download_link)) {
+                error_log('Generate Cover Updater: No valid download link found');
+                return false;
+            }
+            
+            set_transient($this->cache_key, $remote, 7200); // 2小时缓存
         }
         
         return $remote;
@@ -198,9 +229,9 @@ class Plugin_Updater {
      * 获取下载URL
      */
     private function get_download_url($release_data) {
-        // 查找插件ZIP文件
+        // 查找插件ZIP文件（不包含版本号）
         foreach ($release_data['assets'] as $asset) {
-            if (strpos($asset['name'], 'generate-cover-v') === 0 && strpos($asset['name'], '.zip') !== false) {
+            if ($asset['name'] === 'generate-cover.zip') {
                 return $asset['browser_download_url'];
             }
         }
@@ -253,6 +284,14 @@ class Plugin_Updater {
         set_site_transient('update_plugins', $transient);
         
         return $transient;
+    }
+    
+    /**
+     * 验证版本号格式
+     */
+    private function is_valid_version($version) {
+        // 检查版本号格式是否符合语义化版本规范
+        return preg_match('/^\d+\.\d+\.\d+(-[a-zA-Z0-9\-]+)?(\+[a-zA-Z0-9\-]+)?$/', $version);
     }
     
     /**

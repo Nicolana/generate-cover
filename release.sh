@@ -9,7 +9,7 @@ set -e
 REPO="Nicolana/generate-cover"
 VERSION="1.1.0"
 TAG="v$VERSION"
-PLUGIN_FILE="build/generate-cover-v$VERSION.zip"
+PLUGIN_FILE="build/generate-cover.zip"
 RELEASE_NOTES="release-notes.md"
 
 echo "🚀 开始发布 Generate Cover v$VERSION..."

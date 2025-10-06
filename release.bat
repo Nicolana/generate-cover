@@ -8,7 +8,7 @@ REM 使用方法: release.bat
 set REPO=Nicolana/generate-cover
 set VERSION=1.1.0
 set TAG=v%VERSION%
-set PLUGIN_FILE=build\generate-cover-v%VERSION%.zip
+set PLUGIN_FILE=build\generate-cover.zip
 set RELEASE_NOTES=release-notes.md
 
 echo 🚀 开始发布 Generate Cover v%VERSION%...
