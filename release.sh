@@ -7,7 +7,7 @@ set -e
 
 # 配置变量
 REPO="Nicolana/generate-cover"
-VERSION="1.1.0"
+VERSION="1.1.1"
 TAG="v$VERSION"
 PLUGIN_FILE="build/generate-cover.zip"
 RELEASE_NOTES="release-notes.md"

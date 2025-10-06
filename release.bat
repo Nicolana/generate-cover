@@ -6,7 +6,7 @@ REM Generate Cover Plugin Release Script for Windows
 REM 使用方法: release.bat
 
 set REPO=Nicolana/generate-cover
-set VERSION=1.1.0
+set VERSION=1.1.1
 set TAG=v%VERSION%
 set PLUGIN_FILE=build\generate-cover.zip
 set RELEASE_NOTES=release-notes.md

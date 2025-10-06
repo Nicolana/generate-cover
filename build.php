@@ -8,7 +8,7 @@
 // 设置脚本运行目录
 $script_dir = __DIR__;
 $plugin_name = 'generate-cover';
-$version = '1.1.0';
+$version = '1.1.1';
 
 // 创建构建目录
 $build_dir = $script_dir . '/build';
