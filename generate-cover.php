@@ -1,6 +1,4 @@
 <?php
-namespace GenerateCover;
-
 /**
  * Plugin Name: Generate Cover
  * Plugin URI: https://example.com/generate-cover
@@ -10,6 +8,8 @@ namespace GenerateCover;
  * License: GPL v2 or later
  * Text Domain: generate-cover
  */
+
+namespace GenerateCover;
 
 // 防止直接访问
 if (!defined('ABSPATH')) {
