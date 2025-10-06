@@ -32,7 +32,11 @@ spl_autoload_register(function ($class) {
     }
     
     $relative_class = substr($class, $len);
-    $file = $base_dir . str_replace('\\', '/', $relative_class) . '.php';
+    
+    // 将类名转换为文件名格式（class-类名.php）
+    $class_name = strtolower($relative_class);
+    $class_name = str_replace('_', '-', $class_name);
+    $file = $base_dir . 'class-' . $class_name . '.php';
     
     if (file_exists($file)) {
         require $file;
