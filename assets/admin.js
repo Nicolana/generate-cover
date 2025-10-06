@@ -86,7 +86,13 @@
                 console.log('AJAX Success Response:', response);
                 
                 if (response && response.success) {
-                    showSuccessResult(response.data);
+                    if (response.data.async) {
+                        // 异步任务，显示处理中状态
+                        showAsyncResult(response.data);
+                    } else {
+                        // 同步任务，显示结果
+                        showSuccessResult(response.data);
+                    }
                 } else {
                     showError(response.data || '生成失败');
                 }
@@ -170,6 +176,76 @@
                 } else {
                     showError('网络错误：' + error + ' (状态码: ' + xhr.status + ')');
                 }
+            }
+        });
+    }
+    
+    /**
+     * 显示异步处理结果
+     */
+    function showAsyncResult(data) {
+        var $result = $('#generate-cover-result');
+        var $preview = $('#generated-image-preview');
+        
+        $preview.html(
+            '<div style="margin: 20px 0; text-align: center;">' +
+            '<div class="spinner is-active" style="margin: 10px auto;"></div>' +
+            '<p><strong>封面正在生成中...</strong></p>' +
+            '<p style="color: #666; font-size: 12px;">任务ID: ' + data.task_id + '</p>' +
+            '<p style="color: #666; font-size: 12px;">生成完成后会自动更新封面，请稍候。</p>' +
+            '</div>' +
+            '<div style="margin: 10px 0;">' +
+            '<button type="button" id="check-status-btn" class="button">检查状态</button> ' +
+            '<button type="button" id="view-history-btn" class="button">查看历史</button>' +
+            '</div>'
+        );
+        
+        $result.show();
+        
+        // 显示提示消息
+        showNotice('封面生成任务已提交，正在后台处理中...', 'info');
+        
+        // 绑定检查状态按钮
+        $('#check-status-btn').on('click', function() {
+            checkGenerationStatus(data.task_id);
+        });
+    }
+    
+    /**
+     * 检查生成状态
+     */
+    function checkGenerationStatus(taskId) {
+        var $btn = $('#check-status-btn');
+        var originalText = $btn.text();
+        
+        $btn.prop('disabled', true).text('检查中...');
+        
+        $.ajax({
+            url: generateCoverData.ajaxUrl,
+            type: 'POST',
+            data: {
+                action: 'check_generation_status',
+                task_id: taskId,
+                nonce: generateCoverData.nonce
+            },
+            dataType: 'json',
+            success: function(response) {
+                if (response && response.success) {
+                    if (response.data.completed) {
+                        showNotice('封面生成完成！', 'success');
+                        location.reload(); // 刷新页面显示新封面
+                    } else {
+                        showNotice('封面仍在生成中，请稍候...', 'info');
+                    }
+                } else {
+                    showError(response.data || '检查状态失败');
+                }
+            },
+            error: function() {
+                showError('网络错误，无法检查状态');
+            },
+            complete: function() {
+                $btn.prop('disabled', false).text(originalText);
             }
         });
     }

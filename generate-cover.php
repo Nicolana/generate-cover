@@ -74,9 +74,11 @@ class Plugin {
         add_action('wp_ajax_batch_generate_covers', [$this, 'ajax_batch_generate_covers']);
         add_action('wp_ajax_test_ajax_connection', [$this, 'ajax_test_connection']);
         add_action('wp_ajax_simple_test', [$this, 'ajax_simple_test']);
+        add_action('wp_ajax_check_generation_status', [$this, 'ajax_check_generation_status']);
         add_action('admin_enqueue_scripts', [$this, 'enqueue_admin_scripts']);
         add_action('publish_post', [$this, 'auto_generate_cover']);
         add_action('generate_cover_async', [$this, 'handle_async_generation']);
+        add_action('check_cover_generation', [$this, 'handle_check_generation']);
     }
     
     private function load_dependencies() {
@@ -565,8 +567,186 @@ class Plugin {
         ]);
     }
     
+    public function ajax_check_generation_status() {
+        // 确保这是AJAX请求
+        if (!wp_doing_ajax()) {
+            wp_die('Invalid request');
+        }
+        
+        // 确保输出是JSON格式
+        header('Content-Type: application/json; charset=utf-8');
+        
+        // 检查用户权限
+        if (!current_user_can('edit_posts')) {
+            wp_send_json_error('权限不足');
+        }
+        
+        // 检查nonce
+        if (!wp_verify_nonce($_POST['nonce'], 'generate_cover_nonce')) {
+            wp_send_json_error('安全验证失败');
+        }
+        
+        $task_id = sanitize_text_field($_POST['task_id']);
+        if (empty($task_id)) {
+            wp_send_json_error('任务ID不能为空');
+        }
+        
+        // 查找对应的文章
+        $posts = get_posts([
+            'numberposts' => -1,
+            'meta_query' => [
+                [
+                    'key' => '_cover_generation_task_id',
+                    'value' => $task_id,
+                    'compare' => '='
+                ]
+            ]
+        ]);
+        
+        if (empty($posts)) {
+            wp_send_json_error('未找到对应的任务');
+        }
+        
+        $post = $posts[0];
+        $status = get_post_meta($post->ID, '_cover_generation_status', true);
+        
+        if ($status === 'completed') {
+            wp_send_json_success([
+                'completed' => true,
+                'message' => '封面生成完成',
+                'attachment_id' => get_post_meta($post->ID, '_cover_generation_attachment_id', true)
+            ]);
+        } elseif ($status === 'failed') {
+            $error = get_post_meta($post->ID, '_cover_generation_error', true);
+            wp_send_json_success([
+                'completed' => false,
+                'failed' => true,
+                'message' => '生成失败：' . $error
+            ]);
+        } else {
+            wp_send_json_success([
+                'completed' => false,
+                'failed' => false,
+                'message' => '正在生成中...'
+            ]);
+        }
+    }
+    
+    /**
+     * 检查封面生成任务
+     * 
+     * @param int $post_id
+     * @param string $task_id
+     */
+    public function handle_check_generation($post_id, $task_id) {
+        error_log("Generate Cover: Checking generation for post {$post_id}, task {$task_id}");
+        
+        try {
+            $jimeng_ai = new \GenerateCover\Jimeng_AI();
+            $result = $jimeng_ai->check_task_result($task_id);
+            
+            if (!$result['success']) {
+                error_log("Generate Cover: Task check failed - " . $result['message']);
+                // 如果是网络错误，重新安排检查
+                if (strpos($result['message'], 'timeout') !== false || strpos($result['message'], 'DNS') !== false) {
+                    wp_schedule_single_event(time() + 60, 'check_cover_generation', [$post_id, $task_id]);
+                    return;
+                }
+                
+                // 其他错误，标记为失败
+                update_post_meta($post_id, '_cover_generation_status', 'failed');
+                update_post_meta($post_id, '_cover_generation_error', $result['message']);
+                $this->log_generation($post_id, 'error', '任务检查失败：' . $result['message']);
+                return;
+            }
+            
+            $status = $result['status'];
+            error_log("Generate Cover: Task status = {$status}");
+            
+            if ($status === 'done') {
+                // 任务完成，下载并设置封面
+                $this->complete_cover_generation($post_id, $result);
+            } elseif ($status === 'not_found' || $status === 'expired') {
+                // 任务失败
+                update_post_meta($post_id, '_cover_generation_status', 'failed');
+                update_post_meta($post_id, '_cover_generation_error', '任务未找到或已过期');
+                $this->log_generation($post_id, 'error', '任务未找到或已过期');
+            } else {
+                // 任务仍在处理中，重新安排检查
+                wp_schedule_single_event(time() + 30, 'check_cover_generation', [$post_id, $task_id]);
+            }
+            
+        } catch (Exception $e) {
+            error_log("Generate Cover: Exception in handle_check_generation - " . $e->getMessage());
+            update_post_meta($post_id, '_cover_generation_status', 'failed');
+            update_post_meta($post_id, '_cover_generation_error', $e->getMessage());
+            $this->log_generation($post_id, 'error', '检查任务异常：' . $e->getMessage());
+        }
+    }
+    
+    /**
+     * 完成封面生成
+     * 
+     * @param int $post_id
+     * @param array $result
+     */
+    private function complete_cover_generation($post_id, $result) {
+        $post = get_post($post_id);
+        if (!$post) {
+            return;
+        }
+        
+        try {
+            $generator = new \GenerateCover\Cover_Generator();
+            
+            // 下载并保存图片
+            $attachment_id = $generator->save_image_to_media_library($result['image_urls'][0], $post);
+            
+            if (!$attachment_id) {
+                update_post_meta($post_id, '_cover_generation_status', 'failed');
+                update_post_meta($post_id, '_cover_generation_error', '保存图片到媒体库失败');
+                $this->log_generation($post_id, 'error', '保存图片到媒体库失败');
+                return;
+            }
+            
+            // 设置为文章特色图片
+            $featured_result = set_post_thumbnail($post_id, $attachment_id);
+            
+            if (!$featured_result) {
+                update_post_meta($post_id, '_cover_generation_status', 'failed');
+                update_post_meta($post_id, '_cover_generation_error', '设置特色图片失败');
+                $this->log_generation($post_id, 'error', '设置特色图片失败');
+                return;
+            }
+            
+            // 更新状态为成功
+            update_post_meta($post_id, '_cover_generation_status', 'completed');
+            update_post_meta($post_id, '_cover_generation_attachment_id', $attachment_id);
+            update_post_meta($post_id, '_cover_generation_completed_time', current_time('mysql'));
+            
+            // 生成摘要（如果需要）
+            $prompt = get_post_meta($post_id, '_cover_generation_prompt', true);
+            if ($prompt) {
+                $openrouter_api = new \GenerateCover\OpenRouter_API();
+                $summary_result = $openrouter_api->generate_summary($post->post_content, $post->post_title);
+                if ($summary_result['success']) {
+                    update_post_meta($post_id, '_ai_summary', $summary_result['content']);
+                }
+            }
+            
+            $this->log_generation($post_id, 'success', '异步生成成功');
+            error_log("Generate Cover: Cover generation completed for post {$post_id}");
+            
+        } catch (Exception $e) {
+            update_post_meta($post_id, '_cover_generation_status', 'failed');
+            update_post_meta($post_id, '_cover_generation_error', $e->getMessage());
+            $this->log_generation($post_id, 'error', '完成生成异常：' . $e->getMessage());
+        }
+    }
+    
     public static function deactivate() {
         // 插件停用时的操作
         wp_clear_scheduled_hook('generate_cover_async');
+        wp_clear_scheduled_hook('check_cover_generation');
     }
 }

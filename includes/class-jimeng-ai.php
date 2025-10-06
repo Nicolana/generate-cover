@@ -34,9 +34,10 @@ class Jimeng_AI {
      * 
      * @param string $prompt 图片prompt
      * @param array $options 生成选项
+     * @param bool $async 是否异步处理
      * @return array
      */
-    public function generate_image($prompt, $options = []) {
+    public function generate_image($prompt, $options = [], $async = true) {
         if (empty($this->access_key) || empty($this->secret_key)) {
             return [
                 'success' => false,
@@ -63,8 +64,18 @@ class Jimeng_AI {
         
         $task_id = $submit_result['task_id'];
         
-        // 轮询查询结果
-        return $this->poll_result($task_id);
+        if ($async) {
+            // 异步处理：立即返回，后台检查结果
+            return [
+                'success' => true,
+                'task_id' => $task_id,
+                'message' => '任务已提交，正在后台生成中...',
+                'async' => true
+            ];
+        } else {
+            // 同步处理：轮询等待结果
+            return $this->poll_result($task_id);
+        }
     }
     
     /**
@@ -353,6 +364,16 @@ class Jimeng_AI {
     }
     
     /**
+     * 检查任务结果
+     * 
+     * @param string $task_id
+     * @return array
+     */
+    public function check_task_result($task_id) {
+        return $this->get_result($task_id);
+    }
+    
+    /**
      * 测试API连接
      * 
      * @return array
@@ -369,7 +390,7 @@ class Jimeng_AI {
         $result = $this->generate_image('a simple test image', [
             'size' => 1024 * 1024, // 1K分辨率，更快
             'force_single' => true
-        ]);
+        ], false); // 同步测试
         
         if ($result['success']) {
             return [

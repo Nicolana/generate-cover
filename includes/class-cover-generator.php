@@ -47,14 +47,33 @@ class Cover_Generator {
             // 记录生成的prompt
             update_post_meta($post->ID, '_generated_prompt', $prompt);
             
-            // 3. 使用即梦AI生成图片
+            // 3. 使用即梦AI生成图片（异步）
             $image_result = $this->jimeng_ai->generate_image($prompt, [
                 'size' => 4194304, // 2048*2048
                 'force_single' => true
-            ]);
+            ], true); // 异步处理
             
             if (!$image_result['success']) {
                 return $image_result;
+            }
+            
+            // 如果是异步任务，保存任务信息并返回
+            if (isset($image_result['async']) && $image_result['async']) {
+                // 保存任务信息到文章元数据
+                update_post_meta($post->ID, '_cover_generation_task_id', $image_result['task_id']);
+                update_post_meta($post->ID, '_cover_generation_prompt', $prompt);
+                update_post_meta($post->ID, '_cover_generation_status', 'processing');
+                update_post_meta($post->ID, '_cover_generation_start_time', current_time('mysql'));
+                
+                // 安排后台检查任务
+                wp_schedule_single_event(time() + 30, 'check_cover_generation', [$post->ID, $image_result['task_id']]);
+                
+                return [
+                    'success' => true,
+                    'message' => '封面生成任务已提交，正在后台处理中...',
+                    'task_id' => $image_result['task_id'],
+                    'async' => true
+                ];
             }
             
             // 4. 下载并保存图片到WordPress媒体库
