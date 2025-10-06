@@ -43,6 +43,14 @@ spl_autoload_register(function ($class) {
     }
 });
 
+// 手动加载 Plugin_Updater 类作为后备方案
+if (!class_exists('GenerateCover\\Plugin_Updater')) {
+    $updater_file = GENERATE_COVER_PLUGIN_DIR . 'includes/class-plugin-updater.php';
+    if (file_exists($updater_file)) {
+        require_once $updater_file;
+    }
+}
+
 // 插件激活和停用钩子
 register_activation_hook(__FILE__, ['GenerateCover\\Plugin', 'activate']);
 register_deactivation_hook(__FILE__, ['GenerateCover\\Plugin', 'deactivate']);
@@ -97,12 +105,16 @@ class Plugin {
     
     private function init_updater() {
         // 初始化插件升级器
-        new \GenerateCover\Plugin_Updater(__FILE__);
+        if (class_exists('\GenerateCover\Plugin_Updater')) {
+            new \GenerateCover\Plugin_Updater(__FILE__);
+        }
     }
     
     public function show_update_notice() {
-        $updater = new \GenerateCover\Plugin_Updater(__FILE__);
-        $updater->show_update_notice();
+        if (class_exists('\GenerateCover\Plugin_Updater')) {
+            $updater = new \GenerateCover\Plugin_Updater(__FILE__);
+            $updater->show_update_notice();
+        }
     }
     
     public function add_admin_menu() {
