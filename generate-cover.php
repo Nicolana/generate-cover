@@ -5,7 +5,7 @@ namespace GenerateCover;
  * Plugin Name: Generate Cover
  * Plugin URI: https://example.com/generate-cover
  * Description: 自动生成博客封面图片的WordPress插件，使用AI技术生成文章封面和文本总结
- * Version: 1.0.0
+ * Version: 1.1.0
  * Author: Your Name
  * License: GPL v2 or later
  * Text Domain: generate-cover
@@ -17,7 +17,7 @@ if (!defined('ABSPATH')) {
 }
 
 // 定义插件常量
-define('GENERATE_COVER_VERSION', '1.0.0');
+define('GENERATE_COVER_VERSION', '1.1.0');
 define('GENERATE_COVER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('GENERATE_COVER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
