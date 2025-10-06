@@ -87,12 +87,8 @@ class Plugin {
     }
     
     private function load_dependencies() {
-        // 加载必要的类文件
-        require_once GENERATE_COVER_PLUGIN_DIR . 'includes/class-openrouter-api.php';
-        require_once GENERATE_COVER_PLUGIN_DIR . 'includes/class-jimeng-ai.php';
-        require_once GENERATE_COVER_PLUGIN_DIR . 'includes/class-cover-generator.php';
-        require_once GENERATE_COVER_PLUGIN_DIR . 'includes/class-admin-settings.php';
-        require_once GENERATE_COVER_PLUGIN_DIR . 'includes/class-plugin-updater.php';
+        // 依赖文件通过自动加载器加载，无需手动包含
+        // 自动加载器已在插件初始化时注册
     }
     
     private function init_updater() {
