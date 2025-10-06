@@ -208,8 +208,22 @@ class Plugin {
     
     public function meta_box_callback($post) {
         wp_nonce_field('generate_cover_nonce', 'generate_cover_nonce');
+        
+        // 获取默认额外提示词
+        $options = get_option('generate_cover_options');
+        $default_extra_prompt = isset($options['default_extra_prompt']) ? $options['default_extra_prompt'] : '';
+        $placeholder = $default_extra_prompt ? "默认：{$default_extra_prompt}" : "例如：现代简约风格、科技感、温暖色调等";
         ?>
         <div id="generate-cover-container">
+            <p>
+                <label for="extra-prompt" style="display: block; margin-bottom: 5px; font-weight: bold;">
+                    额外提示词（可选）：
+                </label>
+                <textarea id="extra-prompt" name="extra_prompt" rows="3" style="width: 100%; margin-bottom: 10px;" placeholder="<?php echo esc_attr($placeholder); ?>"><?php echo esc_textarea($default_extra_prompt); ?></textarea>
+                <small style="color: #666; display: block; margin-bottom: 10px;">
+                    可以添加风格描述来定制封面，如"现代简约"、"科技感"、"温暖色调"等
+                </small>
+            </p>
             <p>
                 <button type="button" id="generate-cover-btn" class="button button-primary">
                     生成封面图片
@@ -249,13 +263,18 @@ class Plugin {
             GENERATE_COVER_VERSION
         );
         
+        // 获取默认额外提示词
+        $options = get_option('generate_cover_options');
+        $default_extra_prompt = isset($options['default_extra_prompt']) ? $options['default_extra_prompt'] : '';
+        
         wp_localize_script('generate-cover-admin', 'generateCoverData', [
             'ajaxUrl' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('generate_cover_nonce'),
             'postId' => get_the_ID(),
             'userId' => get_current_user_id(),
             'isLoggedIn' => is_user_logged_in(),
-            'canEditPosts' => current_user_can('edit_posts')
+            'canEditPosts' => current_user_can('edit_posts'),
+            'defaultExtraPrompt' => $default_extra_prompt
         ]);
     }
     
@@ -302,9 +321,12 @@ class Plugin {
             wp_send_json_error('文章不存在');
         }
         
+        // 获取额外提示词
+        $extra_prompt = isset($_POST['extra_prompt']) ? sanitize_textarea_field($_POST['extra_prompt']) : '';
+        
         try {
             $generator = new \GenerateCover\Cover_Generator();
-            $result = $generator->generate_cover($post);
+            $result = $generator->generate_cover($post, $extra_prompt);
             
             if ($result['success']) {
                 wp_send_json_success($result);
@@ -493,7 +515,7 @@ class Plugin {
             }
             
             $generator = new \GenerateCover\Cover_Generator();
-            $result = $generator->generate_cover($post);
+            $result = $generator->generate_cover($post, '');
             
             if ($result['success']) {
                 $this->log_generation($post_id, 'success', '异步生成成功');

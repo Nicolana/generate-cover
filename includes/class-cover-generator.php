@@ -20,9 +20,10 @@ class Cover_Generator {
      * 为文章生成封面
      * 
      * @param \WP_Post $post WordPress文章对象
+     * @param string $extra_prompt 额外提示词（可选）
      * @return array
      */
-    public function generate_cover($post) {
+    public function generate_cover($post, $extra_prompt = '') {
         try {
             // 1. 获取文章内容
             $content = $this->get_post_content($post);
@@ -36,7 +37,7 @@ class Cover_Generator {
             }
             
             // 2. 使用OpenRouter生成图片prompt
-            $prompt_result = $this->openrouter_api->generate_image_prompt($content, $title);
+            $prompt_result = $this->openrouter_api->generate_image_prompt($content, $title, $extra_prompt);
             
             if (!$prompt_result['success']) {
                 return $prompt_result;

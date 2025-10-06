@@ -32,9 +32,10 @@ class OpenRouter_API {
      * 
      * @param string $content 文章内容
      * @param string $title 文章标题
+     * @param string $extra_prompt 额外提示词（可选）
      * @return array
      */
-    public function generate_image_prompt($content, $title = '') {
+    public function generate_image_prompt($content, $title = '', $extra_prompt = '') {
         if (empty($this->api_key)) {
             return [
                 'success' => false,
@@ -53,10 +54,16 @@ class OpenRouter_API {
 5. 包含具体的视觉元素描述
 6. 避免包含人物面孔（除非文章内容明确需要）
 7. 使用高质量的摄影或插画风格描述
+8. 如果有额外提示词，请将其融入到最终的prompt中
 
 请直接返回prompt，不要包含其他解释文字。";
 
         $user_prompt = "文章标题：{$title}\n\n文章内容：{$content}";
+        
+        // 如果有额外提示词，添加到用户prompt中
+        if (!empty($extra_prompt)) {
+            $user_prompt .= "\n\n额外提示词（请融入封面风格中）：{$extra_prompt}";
+        }
         
         $messages = [
             [

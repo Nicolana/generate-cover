@@ -65,6 +65,17 @@
         $status.show();
         $btn.prop('disabled', true);
         
+        // 获取额外提示词
+        var extraPrompt = $('#extra-prompt').val();
+        
+        // 如果用户没有输入额外提示词，使用默认值
+        if (!extraPrompt || extraPrompt.trim() === '') {
+            // 从localized data中获取默认提示词（需要在PHP中传递）
+            if (typeof generateCoverData !== 'undefined' && generateCoverData.defaultExtraPrompt) {
+                extraPrompt = generateCoverData.defaultExtraPrompt;
+            }
+        }
+        
         // 发送AJAX请求
         $.ajax({
             url: generateCoverData.ajaxUrl,
@@ -72,7 +83,8 @@
             data: {
                 action: 'generate_cover',
                 post_id: generateCoverData.postId,
-                nonce: generateCoverData.nonce
+                nonce: generateCoverData.nonce,
+                extra_prompt: extraPrompt
             },
             dataType: 'json',
             beforeSend: function(xhr) {

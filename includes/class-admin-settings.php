@@ -85,6 +85,14 @@ class Admin_Settings {
             'generate-cover-settings',
             'generate_cover_main'
         );
+        
+        add_settings_field(
+            'default_extra_prompt',
+            '默认额外提示词',
+            [$this, 'default_extra_prompt_callback'],
+            'generate-cover-settings',
+            'generate_cover_main'
+        );
     }
     
     public function openrouter_api_key_callback() {
@@ -162,6 +170,14 @@ class Admin_Settings {
         echo ' 发布文章时自动生成封面';
         echo '</label>';
         echo '<p class="description">启用后，发布新文章时会自动生成封面图片</p>';
+    }
+    
+    public function default_extra_prompt_callback() {
+        $options = get_option('generate_cover_options');
+        $value = isset($options['default_extra_prompt']) ? $options['default_extra_prompt'] : '';
+        
+        echo '<textarea name="generate_cover_options[default_extra_prompt]" rows="3" style="width: 100%;">' . esc_textarea($value) . '</textarea>';
+        echo '<p class="description">为所有文章设置默认的额外提示词，如"现代简约风格"、"科技感"等。用户可以在编辑文章时覆盖此设置。</p>';
     }
     
     public function admin_page() {
