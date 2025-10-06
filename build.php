@@ -16,13 +16,13 @@ if (!is_dir($build_dir)) {
     mkdir($build_dir, 0755, true);
 }
 
-// 创建版本目录
-$version_dir = $build_dir . '/' . $plugin_name . '-v' . $version;
-if (is_dir($version_dir)) {
-    // 删除已存在的版本目录
-    removeDirectory($version_dir);
+// 创建插件目录（不包含版本号）
+$plugin_dir = $build_dir . '/' . $plugin_name;
+if (is_dir($plugin_dir)) {
+    // 删除已存在的插件目录
+    removeDirectory($plugin_dir);
 }
-mkdir($version_dir, 0755, true);
+mkdir($plugin_dir, 0755, true);
 
 echo "开始打包 Generate Cover v{$version}...\n";
 
@@ -39,7 +39,7 @@ $files_to_copy = [
 // 复制文件
 foreach ($files_to_copy as $file) {
     $source = $script_dir . '/' . $file;
-    $destination = $version_dir . '/' . $file;
+    $destination = $plugin_dir . '/' . $file;
     
     if (is_file($source)) {
         $dest_dir = dirname($destination);
@@ -56,14 +56,14 @@ foreach ($files_to_copy as $file) {
     }
 }
 
-// 创建ZIP包
+// 创建ZIP包（包含版本号）
 $zip_file = $build_dir . '/' . $plugin_name . '-v' . $version . '.zip';
 if (file_exists($zip_file)) {
     unlink($zip_file);
 }
 
 echo "创建ZIP包: {$zip_file}\n";
-createZipFromDirectory($version_dir, $zip_file);
+createZipFromDirectory($plugin_dir, $zip_file);
 
 // 显示文件大小
 $file_size = filesize($zip_file);
@@ -72,7 +72,8 @@ echo "ZIP包大小: {$file_size_mb} MB\n";
 
 echo "打包完成！\n";
 echo "发布包位置: {$zip_file}\n";
-echo "解压目录: {$version_dir}\n";
+echo "解压目录: {$plugin_dir}\n";
+echo "注意: 解压后插件文件夹名称为 '{$plugin_name}'，不包含版本号\n";
 
 /**
  * 递归复制目录

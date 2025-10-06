@@ -62,6 +62,7 @@ class Plugin {
     private function __construct() {
         $this->init_hooks();
         $this->load_dependencies();
+        $this->init_updater();
     }
     
     private function init_hooks() {
@@ -82,6 +83,7 @@ class Plugin {
         add_action('publish_post', [$this, 'auto_generate_cover']);
         add_action('generate_cover_async', [$this, 'handle_async_generation']);
         add_action('check_cover_generation', [$this, 'handle_check_generation']);
+        add_action('admin_notices', [$this, 'show_update_notice']);
     }
     
     private function load_dependencies() {
@@ -90,6 +92,17 @@ class Plugin {
         require_once GENERATE_COVER_PLUGIN_DIR . 'includes/class-jimeng-ai.php';
         require_once GENERATE_COVER_PLUGIN_DIR . 'includes/class-cover-generator.php';
         require_once GENERATE_COVER_PLUGIN_DIR . 'includes/class-admin-settings.php';
+        require_once GENERATE_COVER_PLUGIN_DIR . 'includes/class-plugin-updater.php';
+    }
+    
+    private function init_updater() {
+        // 初始化插件升级器
+        new \GenerateCover\Plugin_Updater(__FILE__);
+    }
+    
+    public function show_update_notice() {
+        $updater = new \GenerateCover\Plugin_Updater(__FILE__);
+        $updater->show_update_notice();
     }
     
     public function add_admin_menu() {
