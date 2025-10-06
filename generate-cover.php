@@ -75,6 +75,7 @@ class Plugin {
         add_action('wp_ajax_test_ajax_connection', [$this, 'ajax_test_connection']);
         add_action('wp_ajax_simple_test', [$this, 'ajax_simple_test']);
         add_action('wp_ajax_check_generation_status', [$this, 'ajax_check_generation_status']);
+        add_action('wp_ajax_trigger_check_generation', [$this, 'ajax_trigger_check_generation']);
         add_action('admin_enqueue_scripts', [$this, 'enqueue_admin_scripts']);
         add_action('publish_post', [$this, 'auto_generate_cover']);
         add_action('generate_cover_async', [$this, 'handle_async_generation']);
@@ -638,7 +639,52 @@ class Plugin {
      * @param int $post_id
      * @param string $task_id
      */
-    public function handle_check_generation($post_id, $task_id) {
+    public function handle_check_generation($post_id = null, $task_id = null) {
+        // 处理 WordPress Cron 调用时可能缺少参数的情况
+        if ($post_id === null || $task_id === null) {
+            error_log("Generate Cover: Missing parameters for handle_check_generation");
+            error_log("Generate Cover: post_id = " . var_export($post_id, true));
+            error_log("Generate Cover: task_id = " . var_export($task_id, true));
+            
+            // 尝试从全局变量或数据库获取参数
+            global $wpdb;
+            
+            // 查找所有正在处理的任务
+            $processing_tasks = $wpdb->get_results("
+                SELECT post_id, meta_value as task_id 
+                FROM {$wpdb->postmeta} 
+                WHERE meta_key = '_cover_generation_task_id' 
+                AND post_id IN (
+                    SELECT post_id 
+                    FROM {$wpdb->postmeta} 
+                    WHERE meta_key = '_cover_generation_status' 
+                    AND meta_value = 'processing'
+                )
+            ");
+            
+            if (!empty($processing_tasks)) {
+                foreach ($processing_tasks as $task) {
+                    error_log("Generate Cover: Found processing task - post_id: {$task->post_id}, task_id: {$task->task_id}");
+                    $this->check_single_generation($task->post_id, $task->task_id);
+                }
+            } else {
+                error_log("Generate Cover: No processing tasks found");
+            }
+            
+            return;
+        }
+        
+        // 调用实际检查函数
+        $this->check_single_generation($post_id, $task_id);
+    }
+    
+    /**
+     * 检查单个生成任务
+     * 
+     * @param int $post_id
+     * @param string $task_id
+     */
+    private function check_single_generation($post_id, $task_id) {
         error_log("Generate Cover: Checking generation for post {$post_id}, task {$task_id}");
         
         try {
@@ -677,11 +723,49 @@ class Plugin {
             }
             
         } catch (Exception $e) {
-            error_log("Generate Cover: Exception in handle_check_generation - " . $e->getMessage());
+            error_log("Generate Cover: Exception in check_single_generation - " . $e->getMessage());
             update_post_meta($post_id, '_cover_generation_status', 'failed');
             update_post_meta($post_id, '_cover_generation_error', $e->getMessage());
             $this->log_generation($post_id, 'error', '检查任务异常：' . $e->getMessage());
         }
+    }
+    
+    public function ajax_trigger_check_generation() {
+        // 确保这是AJAX请求
+        if (!wp_doing_ajax()) {
+            wp_die('Invalid request');
+        }
+        
+        // 确保输出是JSON格式
+        header('Content-Type: application/json; charset=utf-8');
+        
+        // 检查用户权限
+        if (!current_user_can('edit_posts')) {
+            wp_send_json_error('权限不足');
+        }
+        
+        // 检查nonce
+        if (!wp_verify_nonce($_POST['nonce'], 'generate_cover_nonce')) {
+            wp_send_json_error('安全验证失败');
+        }
+        
+        $post_id = intval($_POST['post_id']);
+        $task_id = sanitize_text_field($_POST['task_id']);
+        
+        if (!$post_id || !$task_id) {
+            wp_send_json_error('参数错误');
+        }
+        
+        // 手动触发检查
+        $this->check_single_generation($post_id, $task_id);
+        
+        // 获取最新状态
+        $status = get_post_meta($post_id, '_cover_generation_status', true);
+        
+        wp_send_json_success([
+            'status' => $status,
+            'message' => '检查完成'
+        ]);
     }
     
     /**

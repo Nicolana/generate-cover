@@ -186,7 +186,7 @@ class Cover_Generator {
      * @param \WP_Post $post 文章对象
      * @return int|false 附件ID或false
      */
-    private function save_image_to_media_library($image_url, $post) {
+    public function save_image_to_media_library($image_url, $post) {
         // 检查URL是否有效
         if (empty($image_url) || !filter_var($image_url, FILTER_VALIDATE_URL)) {
             return false;

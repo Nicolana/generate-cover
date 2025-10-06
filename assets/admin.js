@@ -196,6 +196,7 @@
             '</div>' +
             '<div style="margin: 10px 0;">' +
             '<button type="button" id="check-status-btn" class="button">检查状态</button> ' +
+            '<button type="button" id="trigger-check-btn" class="button">手动检查</button> ' +
             '<button type="button" id="view-history-btn" class="button">查看历史</button>' +
             '</div>'
         );
@@ -208,6 +209,11 @@
         // 绑定检查状态按钮
         $('#check-status-btn').on('click', function() {
             checkGenerationStatus(data.task_id);
+        });
+        
+        // 绑定手动检查按钮
+        $('#trigger-check-btn').on('click', function() {
+            triggerCheckGeneration(data.task_id);
         });
     }
     
@@ -243,6 +249,44 @@
             },
             error: function() {
                 showError('网络错误，无法检查状态');
+            },
+            complete: function() {
+                $btn.prop('disabled', false).text(originalText);
+            }
+        });
+    }
+    
+    /**
+     * 手动触发检查
+     */
+    function triggerCheckGeneration(taskId) {
+        var $btn = $('#trigger-check-btn');
+        var originalText = $btn.text();
+        
+        $btn.prop('disabled', true).text('检查中...');
+        
+        $.ajax({
+            url: generateCoverData.ajaxUrl,
+            type: 'POST',
+            data: {
+                action: 'trigger_check_generation',
+                post_id: generateCoverData.postId,
+                task_id: taskId,
+                nonce: generateCoverData.nonce
+            },
+            dataType: 'json',
+            success: function(response) {
+                if (response && response.success) {
+                    showNotice('手动检查完成，状态：' + response.data.status, 'info');
+                    if (response.data.status === 'completed') {
+                        location.reload(); // 刷新页面显示新封面
+                    }
+                } else {
+                    showError(response.data || '手动检查失败');
+                }
+            },
+            error: function() {
+                showError('网络错误，无法手动检查');
             },
             complete: function() {
                 $btn.prop('disabled', false).text(originalText);
