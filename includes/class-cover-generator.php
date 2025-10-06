@@ -21,9 +21,10 @@ class Cover_Generator {
      * 
      * @param \WP_Post $post WordPress文章对象
      * @param string $extra_prompt 额外提示词（可选）
+     * @param int $style_image_id 风格参考图片ID（可选）
      * @return array
      */
-    public function generate_cover($post, $extra_prompt = '') {
+    public function generate_cover($post, $extra_prompt = '', $style_image_id = 0) {
         try {
             // 1. 获取文章内容
             $content = $this->get_post_content($post);
@@ -48,11 +49,22 @@ class Cover_Generator {
             // 记录生成的prompt
             update_post_meta($post->ID, '_generated_prompt', $prompt);
             
-            // 3. 使用即梦AI生成图片（异步）
-            $image_result = $this->jimeng_ai->generate_image($prompt, [
+            // 3. 准备即梦AI参数
+            $image_params = [
                 'size' => 4194304, // 2048*2048
                 'force_single' => true
-            ], true); // 异步处理
+            ];
+            
+            // 如果有风格参考图片，添加到参数中
+            if ($style_image_id > 0) {
+                $style_image_url = wp_get_attachment_url($style_image_id);
+                if ($style_image_url) {
+                    $image_params['style_image'] = $style_image_url;
+                }
+            }
+            
+            // 使用即梦AI生成图片（异步）
+            $image_result = $this->jimeng_ai->generate_image($prompt, $image_params, true); // 异步处理
             
             if (!$image_result['success']) {
                 return $image_result;

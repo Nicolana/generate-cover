@@ -314,3 +314,80 @@
 .status-indicator.pending {
     background-color: #ffb900;
 }
+
+/* 粘贴区域样式 */
+#paste-area {
+    border: 2px dashed #ccc !important;
+    padding: 20px !important;
+    text-align: center !important;
+    margin-bottom: 10px !important;
+    cursor: pointer !important;
+    background: #fafafa !important;
+    border-radius: 4px !important;
+    transition: all 0.3s ease;
+    outline: none;
+}
+
+#paste-area:hover {
+    border-color: #0073aa !important;
+    background: #f0f8ff !important;
+}
+
+#paste-area:focus {
+    border-color: #0073aa !important;
+    background: #f0f8ff !important;
+    box-shadow: 0 0 0 1px #0073aa;
+}
+
+#paste-area.drag-over {
+    border-color: #00a32a !important;
+    background: #f0f9f0 !important;
+}
+
+#paste-text {
+    color: #666;
+    font-size: 14px;
+}
+
+#paste-loading {
+    color: #0073aa;
+    font-size: 14px;
+}
+
+/* 风格图片预览样式 */
+#style-image-preview {
+    background: #f9f9f9;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 10px;
+    text-align: center;
+}
+
+#style-image-preview img {
+    max-width: 100%;
+    max-height: 150px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* 文件输入样式 */
+#style-image {
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 8px;
+    background: #fff;
+    width: 100%;
+    margin-bottom: 10px;
+}
+
+/* 响应式粘贴区域 */
+@media (max-width: 768px) {
+    #paste-area {
+        padding: 15px !important;
+    }
+    
+    #paste-text {
+        font-size: 12px;
+    }
+}

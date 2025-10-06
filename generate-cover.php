@@ -76,6 +76,8 @@ class Plugin {
         add_action('wp_ajax_simple_test', [$this, 'ajax_simple_test']);
         add_action('wp_ajax_check_generation_status', [$this, 'ajax_check_generation_status']);
         add_action('wp_ajax_trigger_check_generation', [$this, 'ajax_trigger_check_generation']);
+        add_action('wp_ajax_upload_style_image', [$this, 'ajax_upload_style_image']);
+        add_action('wp_ajax_upload_pasted_image', [$this, 'ajax_upload_pasted_image']);
         add_action('admin_enqueue_scripts', [$this, 'enqueue_admin_scripts']);
         add_action('publish_post', [$this, 'auto_generate_cover']);
         add_action('generate_cover_async', [$this, 'handle_async_generation']);
@@ -224,6 +226,37 @@ class Plugin {
                     可以添加风格描述来定制封面，如"现代简约"、"科技感"、"温暖色调"等
                 </small>
             </p>
+            
+            <p>
+                <label for="style-image" style="display: block; margin-bottom: 5px; font-weight: bold;">
+                    风格参考图片（可选）：
+                </label>
+                
+                <!-- 粘贴区域 -->
+                <div id="paste-area" style="border: 2px dashed #ccc; padding: 20px; text-align: center; margin-bottom: 10px; cursor: pointer; background: #fafafa; border-radius: 4px;" tabindex="0">
+                    <div id="paste-text">
+                        <span style="font-size: 16px; color: #666;">📋</span><br>
+                        <span style="color: #666;">点击此处或按 Ctrl+V 粘贴图片</span>
+                    </div>
+                    <div id="paste-loading" style="display: none;">
+                        <span class="spinner is-active"></span> 正在处理粘贴的图片...
+                    </div>
+                </div>
+                
+                <!-- 文件上传区域 -->
+                <input type="file" id="style-image" name="style_image" accept="image/*" style="width: 100%; margin-bottom: 10px;" />
+                <small style="color: #666; display: block; margin-bottom: 10px;">
+                    上传一张参考图片来定义封面风格，支持 JPG、PNG 格式，或直接从剪贴板粘贴图片
+                </small>
+                
+                <!-- 图片预览区域 -->
+                <div id="style-image-preview" style="display: none; margin-bottom: 10px;">
+                    <img id="preview-img" style="max-width: 100%; max-height: 150px; border: 1px solid #ddd; border-radius: 4px;" />
+                    <div style="margin-top: 5px;">
+                        <button type="button" id="remove-style-image" class="button button-small">删除图片</button>
+                    </div>
+                </div>
+            </p>
             <p>
                 <button type="button" id="generate-cover-btn" class="button button-primary">
                     生成封面图片
@@ -324,9 +357,12 @@ class Plugin {
         // 获取额外提示词
         $extra_prompt = isset($_POST['extra_prompt']) ? sanitize_textarea_field($_POST['extra_prompt']) : '';
         
+        // 获取风格图片ID
+        $style_image_id = isset($_POST['style_image_id']) ? intval($_POST['style_image_id']) : 0;
+        
         try {
             $generator = new \GenerateCover\Cover_Generator();
-            $result = $generator->generate_cover($post, $extra_prompt);
+            $result = $generator->generate_cover($post, $extra_prompt, $style_image_id);
             
             if ($result['success']) {
                 wp_send_json_success($result);
@@ -787,6 +823,184 @@ class Plugin {
         wp_send_json_success([
             'status' => $status,
             'message' => '检查完成'
+        ]);
+    }
+    
+    /**
+     * 处理风格图片上传
+     */
+    public function ajax_upload_style_image() {
+        // 确保这是AJAX请求
+        if (!wp_doing_ajax()) {
+            wp_die('Invalid request');
+        }
+        
+        // 确保输出是JSON格式
+        header('Content-Type: application/json; charset=utf-8');
+        
+        // 检查用户权限
+        if (!current_user_can('edit_posts')) {
+            wp_send_json_error('权限不足');
+        }
+        
+        // 检查nonce
+        if (!wp_verify_nonce($_POST['nonce'], 'generate_cover_nonce')) {
+            wp_send_json_error('安全验证失败');
+        }
+        
+        // 检查是否有文件上传
+        if (!isset($_FILES['style_image']) || $_FILES['style_image']['error'] !== UPLOAD_ERR_OK) {
+            wp_send_json_error('没有上传文件或上传失败');
+        }
+        
+        $file = $_FILES['style_image'];
+        
+        // 检查文件类型
+        $allowed_types = ['image/jpeg', 'image/png', 'image/jpg'];
+        $file_type = wp_check_filetype($file['name']);
+        
+        if (!in_array($file['type'], $allowed_types)) {
+            wp_send_json_error('不支持的文件格式，请上传 JPG 或 PNG 图片');
+        }
+        
+        // 检查文件大小（限制为5MB）
+        if ($file['size'] > 5 * 1024 * 1024) {
+            wp_send_json_error('文件大小不能超过5MB');
+        }
+        
+        // 使用WordPress的媒体上传功能
+        require_once(ABSPATH . 'wp-admin/includes/file.php');
+        require_once(ABSPATH . 'wp-admin/includes/media.php');
+        require_once(ABSPATH . 'wp-admin/includes/image.php');
+        
+        // 设置上传目录
+        $upload_dir = wp_upload_dir();
+        $filename = sanitize_file_name('style_image_' . time() . '_' . $file['name']);
+        $file_path = $upload_dir['path'] . '/' . $filename;
+        
+        // 移动文件
+        if (!move_uploaded_file($file['tmp_name'], $file_path)) {
+            wp_send_json_error('文件保存失败');
+        }
+        
+        // 创建附件
+        $attachment = [
+            'post_mime_type' => $file['type'],
+            'post_title' => '风格参考图片',
+            'post_content' => '用于封面生成的风格参考图片',
+            'post_status' => 'inherit'
+        ];
+        
+        $attachment_id = wp_insert_attachment($attachment, $file_path);
+        
+        if (!$attachment_id) {
+            wp_send_json_error('创建附件失败');
+        }
+        
+        // 生成附件元数据
+        $attachment_data = wp_generate_attachment_metadata($attachment_id, $file_path);
+        wp_update_attachment_metadata($attachment_id, $attachment_data);
+        
+        // 返回成功结果
+        wp_send_json_success([
+            'attachment_id' => $attachment_id,
+            'url' => wp_get_attachment_url($attachment_id),
+            'filename' => $filename
+        ]);
+    }
+    
+    /**
+     * 处理粘贴的图片上传
+     */
+    public function ajax_upload_pasted_image() {
+        // 确保这是AJAX请求
+        if (!wp_doing_ajax()) {
+            wp_die('Invalid request');
+        }
+        
+        // 确保输出是JSON格式
+        header('Content-Type: application/json; charset=utf-8');
+        
+        // 检查用户权限
+        if (!current_user_can('edit_posts')) {
+            wp_send_json_error('权限不足');
+        }
+        
+        // 检查nonce
+        if (!wp_verify_nonce($_POST['nonce'], 'generate_cover_nonce')) {
+            wp_send_json_error('安全验证失败');
+        }
+        
+        // 获取base64图片数据
+        $image_data = isset($_POST['image_data']) ? $_POST['image_data'] : '';
+        
+        if (empty($image_data)) {
+            wp_send_json_error('没有接收到图片数据');
+        }
+        
+        // 解析base64数据
+        if (preg_match('/data:image\/(\w+);base64,(.+)/', $image_data, $matches)) {
+            $image_type = $matches[1];
+            $base64_data = $matches[2];
+        } else {
+            wp_send_json_error('无效的图片数据格式');
+        }
+        
+        // 检查图片类型
+        if (!in_array($image_type, ['jpeg', 'jpg', 'png'])) {
+            wp_send_json_error('不支持的图片格式，请使用 JPG 或 PNG 格式');
+        }
+        
+        // 解码base64数据
+        $image_binary = base64_decode($base64_data);
+        
+        if ($image_binary === false) {
+            wp_send_json_error('图片数据解码失败');
+        }
+        
+        // 检查文件大小（5MB限制）
+        if (strlen($image_binary) > 5 * 1024 * 1024) {
+            wp_send_json_error('图片文件大小不能超过5MB');
+        }
+        
+        // 使用WordPress的媒体上传功能
+        require_once(ABSPATH . 'wp-admin/includes/file.php');
+        require_once(ABSPATH . 'wp-admin/includes/media.php');
+        require_once(ABSPATH . 'wp-admin/includes/image.php');
+        
+        // 设置上传目录
+        $upload_dir = wp_upload_dir();
+        $filename = sanitize_file_name('pasted_image_' . time() . '.' . $image_type);
+        $file_path = $upload_dir['path'] . '/' . $filename;
+        
+        // 保存文件
+        if (file_put_contents($file_path, $image_binary) === false) {
+            wp_send_json_error('文件保存失败');
+        }
+        
+        // 创建附件
+        $attachment = [
+            'post_mime_type' => 'image/' . $image_type,
+            'post_title' => '粘贴的风格参考图片',
+            'post_content' => '通过剪贴板粘贴的风格参考图片',
+            'post_status' => 'inherit'
+        ];
+        
+        $attachment_id = wp_insert_attachment($attachment, $file_path);
+        
+        if (!$attachment_id) {
+            wp_send_json_error('创建附件失败');
+        }
+        
+        // 生成附件元数据
+        $attachment_data = wp_generate_attachment_metadata($attachment_id, $file_path);
+        wp_update_attachment_metadata($attachment_id, $attachment_data);
+        
+        // 返回成功结果
+        wp_send_json_success([
+            'attachment_id' => $attachment_id,
+            'url' => wp_get_attachment_url($attachment_id),
+            'filename' => $filename
         ]);
     }
     

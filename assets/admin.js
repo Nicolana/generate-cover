@@ -45,6 +45,33 @@
         $(document).on('click', '#view-history-btn', function() {
             viewGenerationHistory();
         });
+        
+        // 绑定风格图片上传事件
+        $('#style-image').on('change', function() {
+            handleStyleImageUpload();
+        });
+        
+        // 绑定删除风格图片事件
+        $(document).on('click', '#remove-style-image', function() {
+            removeStyleImage();
+        });
+        
+        // 绑定粘贴区域事件
+        $('#paste-area').on('click', function() {
+            $(this).focus();
+        });
+        
+        // 绑定粘贴事件
+        $(document).on('paste', '#paste-area', function(e) {
+            handlePasteImage(e);
+        });
+        
+        // 绑定全局粘贴事件（当粘贴区域获得焦点时）
+        $(document).on('paste', function(e) {
+            if ($(e.target).closest('#paste-area').length > 0) {
+                handlePasteImage(e);
+            }
+        });
     });
     
     /**
@@ -76,6 +103,9 @@
             }
         }
         
+        // 获取风格图片ID
+        var styleImageId = $('#style-image-preview').data('attachment-id') || 0;
+        
         // 发送AJAX请求
         $.ajax({
             url: generateCoverData.ajaxUrl,
@@ -84,7 +114,8 @@
                 action: 'generate_cover',
                 post_id: generateCoverData.postId,
                 nonce: generateCoverData.nonce,
-                extra_prompt: extraPrompt
+                extra_prompt: extraPrompt,
+                style_image_id: styleImageId
             },
             dataType: 'json',
             beforeSend: function(xhr) {
@@ -453,6 +484,184 @@
         $('#history-modal').on('click', function(e) {
             if (e.target === this) {
                 $(this).remove();
+            }
+        });
+    }
+    
+    /**
+     * 处理风格图片上传
+     */
+    function handleStyleImageUpload() {
+        var fileInput = $('#style-image')[0];
+        var file = fileInput.files[0];
+        
+        if (!file) {
+            return;
+        }
+        
+        // 检查文件类型
+        if (!file.type.match('image.*')) {
+            showError('请选择图片文件');
+            return;
+        }
+        
+        // 检查文件大小（5MB限制）
+        if (file.size > 5 * 1024 * 1024) {
+            showError('图片文件大小不能超过5MB');
+            return;
+        }
+        
+        // 创建FormData
+        var formData = new FormData();
+        formData.append('action', 'upload_style_image');
+        formData.append('style_image', file);
+        formData.append('nonce', generateCoverData.nonce);
+        
+        // 显示上传状态
+        var $preview = $('#style-image-preview');
+        $preview.html('<div class="spinner is-active"></div> 正在上传...').show();
+        
+        // 上传文件
+        $.ajax({
+            url: generateCoverData.ajaxUrl,
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            dataType: 'json',
+            success: function(response) {
+                if (response && response.success) {
+                    // 显示预览
+                    showStyleImagePreview(response.data.url, response.data.attachment_id);
+                    showNotice('风格图片上传成功！', 'success');
+                } else {
+                    showError('上传失败：' + (response.data || '未知错误'));
+                    $preview.hide();
+                }
+            },
+            error: function(xhr, status, error) {
+                showError('上传失败：网络错误');
+                $preview.hide();
+            }
+        });
+    }
+    
+    /**
+     * 显示风格图片预览
+     */
+    function showStyleImagePreview(url, attachmentId) {
+        var $preview = $('#style-image-preview');
+        
+        $preview.html(
+            '<img id="preview-img" src="' + url + '" style="max-width: 100%; max-height: 150px; border: 1px solid #ddd; border-radius: 4px;" />' +
+            '<div style="margin-top: 5px;">' +
+            '<button type="button" id="remove-style-image" class="button button-small">删除图片</button>' +
+            '</div>'
+        );
+        
+        $preview.data('attachment-id', attachmentId).show();
+    }
+    
+    /**
+     * 删除风格图片
+     */
+    function removeStyleImage() {
+        var $preview = $('#style-image-preview');
+        var attachmentId = $preview.data('attachment-id');
+        
+        // 清空文件输入
+        $('#style-image').val('');
+        
+        // 隐藏预览
+        $preview.hide().removeData('attachment-id');
+        
+        // 如果有附件ID，可以在这里调用删除附件的API（可选）
+        if (attachmentId) {
+            // 注意：这里不实际删除附件，只是清除预览
+            // 如果需要删除附件，可以调用WordPress的删除API
+            showNotice('风格图片已移除', 'info');
+        }
+    }
+    
+    /**
+     * 处理粘贴的图片
+     */
+    function handlePasteImage(e) {
+        e.preventDefault();
+        
+        var clipboardData = e.originalEvent.clipboardData || window.clipboardData;
+        var items = clipboardData.items;
+        
+        // 查找图片数据
+        for (var i = 0; i < items.length; i++) {
+            var item = items[i];
+            
+            if (item.type.indexOf('image') !== -1) {
+                var file = item.getAsFile();
+                
+                if (file) {
+                    // 显示处理状态
+                    showPasteLoading();
+                    
+                    // 将文件转换为base64并上传
+                    var reader = new FileReader();
+                    reader.onload = function(event) {
+                        var base64Data = event.target.result;
+                        uploadPastedImage(base64Data);
+                    };
+                    reader.readAsDataURL(file);
+                    return;
+                }
+            }
+        }
+        
+        // 如果没有找到图片数据
+        showError('剪贴板中没有找到图片数据');
+    }
+    
+    /**
+     * 显示粘贴加载状态
+     */
+    function showPasteLoading() {
+        $('#paste-text').hide();
+        $('#paste-loading').show();
+    }
+    
+    /**
+     * 隐藏粘贴加载状态
+     */
+    function hidePasteLoading() {
+        $('#paste-text').show();
+        $('#paste-loading').hide();
+    }
+    
+    /**
+     * 上传粘贴的图片
+     */
+    function uploadPastedImage(base64Data) {
+        $.ajax({
+            url: generateCoverData.ajaxUrl,
+            type: 'POST',
+            data: {
+                action: 'upload_pasted_image',
+                image_data: base64Data,
+                nonce: generateCoverData.nonce
+            },
+            dataType: 'json',
+            success: function(response) {
+                hidePasteLoading();
+                
+                if (response && response.success) {
+                    // 显示预览
+                    showStyleImagePreview(response.data.url, response.data.attachment_id);
+                    showNotice('图片粘贴成功！', 'success');
+                } else {
+                    showError('粘贴失败：' + (response.data || '未知错误'));
+                }
+            },
+            error: function(xhr, status, error) {
+                hidePasteLoading();
+                showError('粘贴失败：网络错误');
             }
         });
     }

@@ -97,6 +97,12 @@ class Jimeng_AI {
             'max_ratio' => $options['max_ratio']
         ];
         
+        // 如果有风格参考图片，添加到请求体中
+        if (isset($options['style_image']) && !empty($options['style_image'])) {
+            // 根据即梦AI 4.0接口文档，风格参考图片应该使用image_urls数组
+            $body['image_urls'] = [$options['style_image']];
+        }
+        
         error_log('Jimeng AI: Task body = ' . print_r($body, true));
         
         $json_body = json_encode($body, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
@@ -140,9 +146,43 @@ class Jimeng_AI {
         
         if ($status_code !== 200) {
             $error_message = isset($data['message']) ? $data['message'] : '未知错误';
+            $error_code = isset($data['code']) ? $data['code'] : '';
+            
+            // 根据即梦AI 4.0接口文档的错误码进行处理
+            switch ($error_code) {
+                case 50411:
+                    $error_message = '输入图片审核未通过';
+                    break;
+                case 50511:
+                    $error_message = '输出图片审核未通过';
+                    break;
+                case 50412:
+                    $error_message = '输入文本审核未通过';
+                    break;
+                case 50512:
+                    $error_message = '输出文本审核未通过';
+                    break;
+                case 50413:
+                    $error_message = '输入文本含敏感词、版权词等审核不通过';
+                    break;
+                case 50429:
+                    $error_message = 'QPS超限，请稍后重试';
+                    break;
+                case 50430:
+                    $error_message = '并发超限，请稍后重试';
+                    break;
+                case 50500:
+                    $error_message = '内部错误';
+                    break;
+                case 50501:
+                    $error_message = '内部算法错误';
+                    break;
+            }
+            
             return [
                 'success' => false,
-                'message' => 'API错误：' . $error_message
+                'message' => 'API错误：' . $error_message,
+                'error_code' => $error_code
             ];
         }
         
@@ -268,9 +308,43 @@ class Jimeng_AI {
         
         if ($status_code !== 200) {
             $error_message = isset($data['message']) ? $data['message'] : '未知错误';
+            $error_code = isset($data['code']) ? $data['code'] : '';
+            
+            // 根据即梦AI 4.0接口文档的错误码进行处理
+            switch ($error_code) {
+                case 50411:
+                    $error_message = '输入图片审核未通过';
+                    break;
+                case 50511:
+                    $error_message = '输出图片审核未通过';
+                    break;
+                case 50412:
+                    $error_message = '输入文本审核未通过';
+                    break;
+                case 50512:
+                    $error_message = '输出文本审核未通过';
+                    break;
+                case 50413:
+                    $error_message = '输入文本含敏感词、版权词等审核不通过';
+                    break;
+                case 50429:
+                    $error_message = 'QPS超限，请稍后重试';
+                    break;
+                case 50430:
+                    $error_message = '并发超限，请稍后重试';
+                    break;
+                case 50500:
+                    $error_message = '内部错误';
+                    break;
+                case 50501:
+                    $error_message = '内部算法错误';
+                    break;
+            }
+            
             return [
                 'success' => false,
-                'message' => 'API错误：' . $error_message
+                'message' => 'API错误：' . $error_message,
+                'error_code' => $error_code
             ];
         }
         
@@ -382,20 +456,20 @@ class Jimeng_AI {
         if (empty($this->access_key) || empty($this->secret_key)) {
             return [
                 'success' => false,
-                'message' => 'API密钥未配置'
+                'message' => '即梦AI API密钥未配置'
             ];
         }
         
-        // 使用一个简单的prompt测试
-        $result = $this->generate_image('a simple test image', [
-            'size' => 1024 * 1024, // 1K分辨率，更快
+        // 使用即梦AI 4.0接口进行测试
+        $result = $this->generate_image('一个简单的测试图片，蓝天白云', [
+            'size' => 1048576, // 1024*1024，符合接口文档要求
             'force_single' => true
         ], false); // 同步测试
         
         if ($result['success']) {
             return [
                 'success' => true,
-                'message' => 'API连接正常'
+                'message' => '即梦AI 4.0 API连接正常'
             ];
         } else {
             return $result;
