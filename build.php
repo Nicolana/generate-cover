@@ -144,6 +144,9 @@ function createZipFromDirectory($source, $zip_file) {
         $file_path = $file->getRealPath();
         $relative_path = substr($file_path, strlen($source) + 1);
         
+        // 强制使用正斜杠作为路径分隔符（跨平台兼容）
+        $relative_path = str_replace('\\', '/', $relative_path);
+        
         if ($file->isDir()) {
             $zip->addEmptyDir($relative_path);
         } else {
